@@ -19,6 +19,11 @@
 #define COLS 100
 #define LINHAS 75
 
+// Sprite do personagem (spritesheet 4x4, frames de 32x32)
+#define SPRITE_TAM      32
+#define SPRITE_FRAMES   4
+#define SPRITE_VEL_ANIM 0.12f   // segundos por frame
+
 static int ColideComAzul(int mapa[LINHAS][COLS], Vector2 centro, float raio)
 {
     int minX = (int)((centro.x - raio) / TILE);
@@ -45,7 +50,27 @@ static int ColideComAzul(int mapa[LINHAS][COLS], Vector2 centro, float raio)
 
     return 0;
 }
+int CarregarMapa(const char *caminho, int mapa[LINHAS][COLS])
+{
+    FILE *f = fopen(caminho, "r"); //Abre o arquivo para modificar o que deve ser feito (Carregar o mapa).
+    if (f == NULL)
+    {
+        TraceLog(LOG_ERROR, "Nao abriu o arquivo: %s", caminho); //Trata o erro de caso não tenha aberto o arquivo
+        return 0;
+    }
 
+    char linha[COLS + 4]; //Cria uma string (+4 -> Espaço extra por preocausão)
+    for (int y = 0; y < LINHAS; y++)
+    {
+        if (fgets(linha, sizeof(linha), f) == NULL) break; // Passa por todos até achar uma quebra de linha.
+        for (int x = 0; x < COLS; x++)
+        {
+            mapa[y][x] = linha[x] - '0';
+        }
+    }
+    fclose(f);
+    return 1;
+}
 int main(void)
 {
     InitWindow(LARGURA_TELA, ALTURA_TELA, "Mapa maior que a tela");
@@ -53,6 +78,13 @@ int main(void)
 
     Vector2 jogador = { MAPA_LARGURA / 2.0f, MAPA_ALTURA / 2.0f };
     float velocidade = 300.0f;
+
+    // --- Sprite do personagem (carregar depois do InitWindow) ---
+    Texture2D personagem = LoadTexture("personagem.png");
+    SetTextureFilter(personagem, TEXTURE_FILTER_POINT); // mantém a pixel art nítida
+    int frameAtual = 0;
+    int direcao = 0;          // 0=baixo, 1=esquerda, 2=direita, 3=cima
+    float timerAnim = 0.0f;
 
     Camera2D camera = { 0 };
     camera.offset = (Vector2){ LARGURA_TELA / 2.0f, ALTURA_TELA / 2.0f }; // centro da tela
@@ -62,21 +94,7 @@ int main(void)
 
     int mapa[LINHAS][COLS];
 
-    FILE *f = fopen("mapa.txt", "r");
-    if (f == NULL)
-    {
-        TraceLog(LOG_ERROR, "Nao abriu mapa.txt");
-        return 1;
-    }
-
-    char linha[COLS + 4]; // sobra espaço para \r\n
-    for (int y = 0; y < LINHAS; y++)
-    {
-        if (fgets(linha, sizeof(linha), f) == NULL) break;
-        for (int x = 0; x < COLS; x++)
-            mapa[y][x] = linha[x] - '0';
-    }
-    fclose(f);
+    if (!CarregarMapa("mapa.txt", mapa)) return 1;
 
     while (!WindowShouldClose())
     {
@@ -98,6 +116,28 @@ int main(void)
         if (jogador.y < 0) jogador.y = 0;
         if (jogador.x > MAPA_LARGURA) jogador.x = MAPA_LARGURA;
         if (jogador.y > MAPA_ALTURA)  jogador.y = MAPA_ALTURA;
+
+        // Direção e animação do personagem
+        int andando = 0;
+        if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) { direcao = 0; andando = 1; }
+        if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) { direcao = 3; andando = 1; }
+        if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) { direcao = 1; andando = 1; }
+        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { direcao = 2; andando = 1; }
+
+        if (andando)
+        {
+            timerAnim += dt;
+            if (timerAnim >= SPRITE_VEL_ANIM)
+            {
+                timerAnim = 0.0f;
+                frameAtual = (frameAtual + 1) % SPRITE_FRAMES;
+            }
+        }
+        else
+        {
+            frameAtual = 0;   // parado = primeiro frame
+            timerAnim = 0.0f;
+        }
 
         // Câmera segue o jogador
         camera.target = jogador;
@@ -138,14 +178,20 @@ int main(void)
                         DrawRectangle(x * TILE, y * TILE, TILE, TILE, cor);
                     }
                 }
-                DrawCircleV(jogador, 14, RED);
-                EndMode2D();
 
-                DrawText("Setas ou WASD para mover", 10, 10, 20, WHITE);
-                DrawFPS(10, 40);
+                // Personagem (substitui a bola vermelha)
+                Rectangle origem  = { frameAtual * (float)SPRITE_TAM, direcao * (float)SPRITE_TAM, SPRITE_TAM, SPRITE_TAM };
+                Rectangle destino = { jogador.x, jogador.y, SPRITE_TAM, SPRITE_TAM };
+                Vector2 centro = { SPRITE_TAM / 2.0f, SPRITE_TAM / 2.0f };
+                DrawTexturePro(personagem, origem, destino, centro, 0.0f, WHITE);
+            EndMode2D();
+
+            DrawText("Setas ou WASD para mover", 10, 10, 20, WHITE);
+            DrawFPS(10, 40);
         EndDrawing();
-        }
-        
+    }
+
+    UnloadTexture(personagem);
     CloseWindow();
     return 0;
 }
