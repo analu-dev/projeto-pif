@@ -1,7 +1,7 @@
 #include "raylib.h"
 #include <stdio.h>
 #include "entities.c"
-
+#include "crafting.c"
 // Ao modificar o codigo, o projeto deve ser recompilado para que as alterações tenham efeito.
 // comando pra fazer isso: gcc main.c -o jogo.exe -I C:\raylib\include -L C:\raylib\lib -lraylib -lopengl32 -lgdi32 -lwinmm
 // certifiqque-se de que o jogo previamente aberto foi fechado antes de recompilar.
@@ -178,6 +178,17 @@ int main(void)
     float vida = VIDA_JOGADOR;
     Vector2 inicio = jogador;     // ponto de renascimento
 
+    int inventory[50] = {0};
+    // inventory[1] vai representar a Madeira. 
+    // Remova ou ajuste se quiser começar com 0 e ganhar apenas derrubando árvores.
+
+    recipe receita_graveto;
+    receita_graveto.id_result = 10;       
+    receita_graveto.qtd_result = 1;       
+    receita_graveto.total_resources = 1;  
+    receita_graveto.resource[0].id_item = 1; // ID 1 = Madeira
+    receita_graveto.resource[0].qtd = 2;     // Custa 2 madeiras
+
     // --- Sprite do personagem (carregar depois do InitWindow) ---
     Texture2D personagem = LoadTexture("pictures/personagem.png");
     SetTextureFilter(personagem, TEXTURE_FILTER_POINT); // mantém a pixel art nítida
@@ -235,6 +246,7 @@ int main(void)
             };
         }
     }
+    
 
     while (!WindowShouldClose())
     {
@@ -307,10 +319,15 @@ int main(void)
                 if (dx * dx + dy * dy < 50.0f * 50.0f)   // alcance de 50 px
                 {
                     quebrar_recurso(&arvores[i], 1);
-                    if (arvores[i].quebrado) madeira++;   // ganha madeira ao derrubar
+                    if (arvores[i].quebrado) inventory[1]++;   // ganha madeira ao derrubar
                     break;                                // só uma árvore por golpe
                 }
             }
+        }
+        if (IsKeyPressed(KEY_C))
+        {
+            printf("\n--- Tentando craftar ---\n");
+            crafting(receita_graveto, inventory);
         }
 
         // Dano contínuo na água (testa o "pé" do personagem)
@@ -369,7 +386,8 @@ int main(void)
 
             DesenhaVida(vida);
 
-            DrawText(TextFormat("Madeira: %d", madeira), 10, 70, 20, WHITE);
+            DrawText(TextFormat("Madeira (ID 1): %d", inventory[1]), 10, 90, 20, WHITE);
+            DrawText(TextFormat("Graveto (ID 10): %d", inventory[10]), 10, 120, 20, WHITE);
             DrawText("Setas ou WASD para mover", 10, 10, 20, WHITE);
             DrawFPS(10, 40);
         EndDrawing();
