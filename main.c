@@ -178,9 +178,16 @@ int main(void)
     float vida = VIDA_JOGADOR;
     Vector2 inicio = jogador;     // ponto de renascimento
 
-    // --- Sprite do personagem (carregar depois do InitWindow) ---
+    // --- CARREGAMENTO DE TEXTURAS (Uma única vez aqui) ---
     Texture2D personagem = LoadTexture("pictures/personagem.png");
     SetTextureFilter(personagem, TEXTURE_FILTER_POINT); // mantém a pixel art nítida
+    
+    Texture2D texArvore = LoadTexture("pictures/arvore.png");
+    SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
+
+    Texture2D texGrama = LoadTexture("pictures/textures/grama.png");
+    SetTextureFilter(texGrama, TEXTURE_FILTER_POINT);
+
     int frameAtual = 0;
     int direcao = 0;          // 0=baixo, 1=esquerda, 2=direita, 3=cima
     float timerAnim = 0.0f;
@@ -193,10 +200,15 @@ int main(void)
 
     int mapa[LINHAS][COLS];
 
-    if (!CarregarMapa("mapa.txt", mapa)) return 1;
-    
-    Texture2D texArvore = LoadTexture("pictures/arvore.png");
-    SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
+    if (!CarregarMapa("mapa.txt", mapa)) 
+    {
+        // Se falhar, descarrega o que já subiu na memória antes de fechar
+        UnloadTexture(personagem);
+        UnloadTexture(texArvore);
+        UnloadTexture(texGrama);
+        CloseWindow();
+        return 1;
+    }
 
     Recursos arvores[MAX_ARVORES];
     int numArvores = 0;
@@ -329,39 +341,54 @@ int main(void)
             ClearBackground(BLACK);
 
             BeginMode2D(camera);
+                
+                // 1. DESENHO DO CHÃO DO MAPA
                 for (int y = 0; y < LINHAS; y++)
                 {
                     for (int x = 0; x < COLS; x++)
                     {
-                        Color cor;
-                        switch (mapa[y][x])
+                        // Se for o tile 2 (Grama), desenha a textura repetida em vez de cor sólida
+                        if (mapa[y][x] == 2)
                         {
-                            case 0: cor = BLUE;      break;
-                            case 1: cor = BEIGE;     break;
-                            case 2: cor = GREEN;     break;
-                            case 3: cor = DARKGRAY;  break;
-                            case 4: cor = LIGHTGRAY; break;
-                            case 5: cor = BROWN;     break;
-                            case 6: cor = (Color){ 20, 140, 60, 255 }; break;
-                            case 7: cor = BLACK;     break;
-                            default: cor = BLACK;    break;
+                            DrawTexture(texGrama, x * TILE, y * TILE, WHITE);
                         }
-                        DrawRectangle(x * TILE, y * TILE, TILE, TILE, cor);
+                        else
+                        {
+                            Color cor;
+                            switch (mapa[y][x])
+                            {
+                                case 0: cor = BLUE;      break;
+                                case 1: cor = BEIGE;     break;
+                                case 3: cor = DARKGRAY;  break;
+                                case 4: cor = LIGHTGRAY; break;
+                                case 5: cor = BROWN;     break;
+                                case 6: cor = (Color){ 20, 140, 60, 255 }; break;
+                                case 7: cor = BLACK;     break;
+                                default: cor = BLACK;    break;
+                            }
+                            DrawRectangle(x * TILE, y * TILE, TILE, TILE, cor);
+                        }
                     }
                 }
-                for (int i = 0; i < numArvores; i++)
-                    if (arvores[i].posicao.y <= jogador.y) DesenhaArvore(texArvore, &arvores[i]);
 
-                // Personagem (substitui a bola vermelha)
+                // 2. Y-SORTING PARTE 1: Desenha as árvores que estão ATRÁS do jogador
+                for (int i = 0; i < numArvores; i++)
+                {
+                    if (arvores[i].posicao.y <= jogador.y) DesenhaArvore(texArvore, &arvores[i]);
+                }
+
+                // 3. DESENHO DO PERSONAGEM
                 Rectangle origem  = { frameAtual * (float)SPRITE_TAM, direcao * (float)SPRITE_TAM, SPRITE_TAM, SPRITE_TAM };
                 Rectangle destino = { jogador.x, jogador.y, SPRITE_TAM, SPRITE_TAM };
                 Vector2 centro = { SPRITE_TAM / 2.0f, SPRITE_TAM / 2.0f };
                 DrawTexturePro(personagem, origem, destino, centro, 0.0f, WHITE);
                 
+                // 4. Y-SORTING PARTE 2: Desenha as árvores que estão na FRENTE do jogador
                 for (int i = 0; i < numArvores; i++)
+                {
                     if (arvores[i].posicao.y > jogador.y) DesenhaArvore(texArvore, &arvores[i]);
+                }
 
-                
             EndMode2D();
 
             // Tela levemente vermelha enquanto toma dano
@@ -375,8 +402,10 @@ int main(void)
         EndDrawing();
     }
 
+    // --- DESCARREGAR RECURSOS ---
     UnloadTexture(personagem);
     UnloadTexture(texArvore);
+    UnloadTexture(texGrama);
     CloseWindow();
     return 0;
 }
