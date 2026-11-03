@@ -169,8 +169,8 @@ void SpawnMonstro(
             .nivel = 1,
             .vida = 10.0f,
             .vida_maxima = 10.0f,
-            .ataque = 3f,
-            .defesa = 0f,
+            .ataque = 3.0f,
+            .defesa = 0.0f,
             .morto = false
         };
 
