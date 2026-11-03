@@ -67,13 +67,13 @@ static int ColideComParede(int mapa[LINHAS][COLS], Vector2 centro, float raio)
     return 0;
 }
 
-static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, int numArvores, Recursos arvores[])
+static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, Recursos *arvores)
 {
-    for (int i = 0; i < numArvores; i++)
+    for (Recursos *a = arvores; a != NULL; a = a->proximo)
     {
 
         // centro do tronco: um pouco acima da base da árvore
-        Vector2 c = { arvores[i].posicao.x, arvores[i].posicao.y - 20.0f };
+        Vector2 c = { a->posicao.x, a->posicao.y - 20.0f };
         float limite = raio + RAIO_TRONCO;
 
         float dxN = proximo.x - c.x, dyN = proximo.y - c.y;
@@ -189,17 +189,6 @@ int main(void)
     receita_graveto.resource[0].id_item = 1; // ID 1 = Madeira
     receita_graveto.resource[0].qtd = 2;     // Custa 2 madeiras
 
-    int inventory[50] = {0};
-    // inventory[1] vai representar a Madeira. 
-    // Remova ou ajuste se quiser começar com 0 e ganhar apenas derrubando árvores.
-
-    recipe receita_graveto;
-    receita_graveto.id_result = 10;       
-    receita_graveto.qtd_result = 1;       
-    receita_graveto.total_resources = 1;  
-    receita_graveto.resource[0].id_item = 1; // ID 1 = Madeira
-    receita_graveto.resource[0].qtd = 2;     // Custa 2 madeiras
-
     // --- CARREGAMENTO DE TEXTURAS (Uma única vez aqui) ---
     Texture2D personagem = LoadTexture("pictures/personagem.png");
     SetTextureFilter(personagem, TEXTURE_FILTER_POINT); // mantém a pixel art nítida
@@ -232,7 +221,7 @@ int main(void)
         return 1;
     }
 
-    Recursos arvores[MAX_ARVORES];
+    Recursos *arvores = NULL;
     int numArvores = 0;
     int madeira = 0;
 
@@ -249,24 +238,25 @@ int main(void)
             float dx = pos.x - jogador.x, dy = pos.y - jogador.y;
             if (dx * dx + dy * dy < 64.0f * 64.0f) continue;
 
-            // nem colada em outra árvore
+                        // nem colada em outra árvore
             int perto = 0;
-            for (int i = 0; i < numArvores; i++)
+            for (Recursos *a = arvores; a != NULL; a = a->proximo)
             {
-                dx = pos.x - arvores[i].posicao.x;
-                dy = pos.y - arvores[i].posicao.y;
+                dx = pos.x - a->posicao.x;
+                dy = pos.y - a->posicao.y;
                 if (dx * dx + dy * dy < DIST_MIN_ARVORES * DIST_MIN_ARVORES) { perto = 1; break; }
             }
             if (perto) continue;
 
-            arvores[numArvores++] = (Recursos){
+            inserir_recurso(&arvores, (Recursos){
                 .posicao = pos,
                 .vida = 3,
                 .vida_maxima = 3,
                 .quebrado = false,
                 .tempo_renascimento = 0.0f,
                 .cooldown_renascimento = 10.0f
-            };
+            });
+            numArvores++;
         }
     }
     
@@ -279,12 +269,12 @@ int main(void)
         Vector2 proximo = jogador;
         if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) proximo.x += velocidade * dt;
         if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) proximo.x -= velocidade * dt;
-        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, numArvores, arvores)) jogador.x = proximo.x;
+        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, arvores)) jogador.x = proximo.x;
 
         proximo = jogador;
         if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) proximo.y += velocidade * dt;
         if (IsKeyDown(KEY_UP)   || IsKeyDown(KEY_W)) proximo.y -= velocidade * dt;
-        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, numArvores, arvores)) jogador.y = proximo.y;
+        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, arvores)) jogador.y = proximo.y;
 
         // Limita o jogador dentro do mapa
         if (jogador.x < 0) jogador.x = 0;
@@ -329,24 +319,25 @@ int main(void)
         if (camera.target.x > MAPA_LARGURA - metadeL) camera.target.x = MAPA_LARGURA - metadeL;
         if (camera.target.y > MAPA_ALTURA  - metadeA) camera.target.y = MAPA_ALTURA  - metadeA;
 
-        atualiza_recurso(arvores, numArvores);
+                atualiza_recurso(arvores);
 
         if (IsKeyPressed(KEY_E))
         {
-            for (int i = 0; i < numArvores; i++)
+            for (Recursos *a = arvores; a != NULL; a = a->proximo)
             {
-                if (arvores[i].quebrado) continue;
+                if (a->quebrado) continue;
 
-                float dx = jogador.x - arvores[i].posicao.x;
-                float dy = jogador.y - arvores[i].posicao.y;
+                float dx = jogador.x - a->posicao.x;
+                float dy = jogador.y - a->posicao.y;
                 if (dx * dx + dy * dy < 50.0f * 50.0f)   // alcance de 50 px
                 {
-                    quebrar_recurso(&arvores[i], 1);
-                    if (arvores[i].quebrado) inventory[1]++;   // ganha madeira ao derrubar
+                    quebrar_recurso(a, 1);
+                    if (a->quebrado) inventory[1]++;   // ganha madeira ao derrubar
                     break;                                // só uma árvore por golpe
                 }
             }
         }
+
         if (IsKeyPressed(KEY_C))
         {
             printf("\n--- Tentando craftar ---\n");
@@ -400,9 +391,9 @@ int main(void)
                 }
 
                 // 2. Y-SORTING PARTE 1: Desenha as árvores que estão ATRÁS do jogador
-                for (int i = 0; i < numArvores; i++)
+                for (Recursos *a = arvores; a != NULL; a = a->proximo)
                 {
-                    if (arvores[i].posicao.y <= jogador.y) DesenhaArvore(texArvore, &arvores[i]);
+                    if (a->posicao.y <= jogador.y) DesenhaArvore(texArvore, a);
                 }
 
                 // 3. DESENHO DO PERSONAGEM
@@ -412,9 +403,9 @@ int main(void)
                 DrawTexturePro(personagem, origem, destino, centro, 0.0f, WHITE);
                 
                 // 4. Y-SORTING PARTE 2: Desenha as árvores que estão na FRENTE do jogador
-                for (int i = 0; i < numArvores; i++)
+                for (Recursos *a = arvores; a != NULL; a = a->proximo)
                 {
-                    if (arvores[i].posicao.y > jogador.y) DesenhaArvore(texArvore, &arvores[i]);
+                    if (a->posicao.y > jogador.y) DesenhaArvore(texArvore, a);
                 }
 
             EndMode2D();
@@ -432,6 +423,8 @@ int main(void)
     }
 
     // --- DESCARREGAR RECURSOS ---
+        // --- DESCARREGAR RECURSOS ---
+    liberar_recursos(arvores);
     UnloadTexture(personagem);
     UnloadTexture(texArvore);
     UnloadTexture(texGrama);
