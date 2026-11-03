@@ -4,6 +4,7 @@
 #include "crafting.c"
 #include "math.h"
 #include "time.h"
+#include "raymath.h"
 // Ao modificar o codigo, o projeto deve ser recompilado para que as alterações tenham efeito.
 // comando pra fazer isso: gcc main.c -o jogo.exe -I C:\raylib\include -L C:\raylib\lib -lraylib -lopengl32 -lgdi32 -lwinmm
 // certifiqque-se de que o jogo previamente aberto foi fechado antes de recompilar.
@@ -259,6 +260,25 @@ static void DesenhaVida(float vida)
     }
 }
 
+void MoverMonstro(Monstro *monstro, Vector2 jogador, float dt) {
+    if (monstro->morto) return;
+
+    Vector2 direcao = Vector2Subtract(jogador, monstro->posicao);
+
+    float distancia = Vector2Length(direcao);
+
+    if (distancia < 1.0f) return;
+
+    direcao = Vector2Normalize(direcao);
+
+    Vector2 movimento = Vector2Scale(
+        direcao,
+        monstro->velocidade * dt
+    );
+
+    monstro->posicao = Vector2Add(monstro->posicao, movimento);
+}
+
 int main(void)
 {
     InitWindow(LARGURA_TELA, ALTURA_TELA, "Mapa maior que a tela");
@@ -479,12 +499,15 @@ int main(void)
             timerSpawn = 0.0f;
         }
 
-        //dano de sol pra os monstros
         float danoSol = 2.0f;
-
+        
+        //atualiza monstros
         for (int i = 0; i < quantidadeMonstros; i++) {
             if (monstros[i].morto) continue;
-
+            
+            MoverMonstro(&monstros[i], jogador, dt);
+            
+            //dano de sol
             if (!isNoite) {
                 monstros[i].vida -= danoSol * dt;
 
