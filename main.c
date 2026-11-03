@@ -98,6 +98,8 @@ static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, int numAr
     return 0;
 }
 
+static int TileEm(int mapa[LINHAS][COLS], Vector2 pos);
+
 void SpawnMonstro(
     Monstro monstros[],
     int *quantidadeMonstros,
@@ -124,8 +126,8 @@ void SpawnMonstro(
         float dy = pos.y - jogador.y;
         float distancia2 = dx * dx + dy * dy;
 
-        float minDist = 10.0f * TILE;
-        float maxDist = 20.0f * TILE;
+        float minDist = 2.0f * TILE;
+        float maxDist = 5.0f * TILE;
 
         if (distancia2 < minDist * minDist ||
             distancia2 > maxDist * maxDist) {
@@ -446,6 +448,8 @@ int main(void)
             if (timerSpawn >= intervaloSpawn) {
                 timerSpawn = 0.0f;
 
+                printf("Tentando spawnar monstro...\n");
+
                 SpawnMonstro(
                     monstros,
                     &quantidadeMonstros,
@@ -454,6 +458,9 @@ int main(void)
                     numArvores,
                     arvores
                 );
+
+                printf("Quantidade de monstros: %d\n", quantidadeMonstros);
+
             }
         }
         else {
