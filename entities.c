@@ -17,9 +17,9 @@ typedef struct {
     //eu gosto muito do jeito que risk of rain faz spawn de monstro, se vcs quiserem me perguntar sobre dps eu explico
 
     float vida;
-    int vida_maxima;
-    int ataque;
-    int defesa;
+    float vida_maxima;
+    float ataque;
+    float defesa;
 
     bool morto;
 } Monstro;

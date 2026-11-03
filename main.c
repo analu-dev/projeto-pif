@@ -48,7 +48,7 @@ Monstro monstros[MAX_MONSTROS] = {0};
 int quantidadeMonstros = 0;
 
 float timerSpawn = 0.0f;
-float intervaloSpawn = 5.0f; // um monstro a cada 5 segundos
+float intervaloSpawn = 2.0f; // um monstro a cada 2 segundos
 
 static int ColideComParede(int mapa[LINHAS][COLS], Vector2 centro, float raio)
 {
@@ -166,10 +166,11 @@ void SpawnMonstro(
         monstros[*quantidadeMonstros] = (Monstro){
             .posicao = pos,
             .velocidade = 100.0f,
-            .vida = 30.0f,
-            .vida_maxima = 30.0f,
-            .ataque = 5,
-            .defesa = 2,
+            .nivel = 1,
+            .vida = 10.0f,
+            .vida_maxima = 10.0f,
+            .ataque = 3f,
+            .defesa = 0f,
             .morto = false
         };
 
