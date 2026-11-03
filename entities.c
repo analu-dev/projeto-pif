@@ -10,6 +10,26 @@ typedef struct{
     float cooldown_renascimento;
 }Recursos;
 
+typedef struct {
+    Vector2 posicao;
+    float velocidade;
+    int nivel; //isso aqui é pra usar na progressão do jogo depois
+    //eu gosto muito do jeito que risk of rain faz spawn de monstro, se vcs quiserem me perguntar sobre dps eu explico
+
+    float vida;
+    int vida_maxima;
+    int ataque;
+    int defesa;
+
+    bool morto;
+} Monstro;
+/*
+a ideia é:
+<A ataca B> 
+B.vida -= max(0, A.ataque - B.defesa);
+if B.vida <= 0;
+    B.morto = true;
+*/
 
 void quebrar_recurso(Recursos *recurso, int dano) {
     if (recurso->quebrado) return; // Não dá para quebrar o que já está quebrado
