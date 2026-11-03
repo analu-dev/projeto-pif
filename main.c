@@ -126,8 +126,8 @@ void SpawnMonstro(
         float dy = pos.y - jogador.y;
         float distancia2 = dx * dx + dy * dy;
 
-        float minDist = 2.0f * TILE;
-        float maxDist = 5.0f * TILE;
+        float minDist = 5.0f * TILE;
+        float maxDist = 20.0f * TILE;
 
         if (distancia2 < minDist * minDist ||
             distancia2 > maxDist * maxDist) {
@@ -297,7 +297,18 @@ int main(void)
     int mapa[LINHAS][COLS];
 
     if (!CarregarMapa("mapa.txt", mapa)) return 1;
-    
+
+    printf("Arquivo existe: %d\n", FileExists("pictures/carangueijo.png"));
+
+    Texture2D texturaMonstro = LoadTexture("pictures/carangueijo.png");
+
+    if (!IsTextureValid(texturaMonstro)) {
+        printf("ERRO: Nao foi possivel carregar a textura do monstro!\n");
+    } else {
+        printf("Textura carregada com sucesso! Tamanho: %d x %d\n",
+            texturaMonstro.width, texturaMonstro.height);
+    }
+
     Texture2D texArvore = LoadTexture("pictures/arvore.png");
     SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
 
@@ -521,7 +532,29 @@ int main(void)
                 for (int i = 0; i < quantidadeMonstros; i++) {
                     if (monstros[i].morto) continue;
 
-                    DrawCircleV(monstros[i].posicao, 12.0f, RED);
+                    Rectangle origem = {
+                        0, 0,
+                        (float)texturaMonstro.width,
+                        (float)texturaMonstro.height
+                    };
+
+                    Rectangle destino = {
+                        monstros[i].posicao.x,
+                        monstros[i].posicao.y,
+                        32.0f,
+                        32.0f
+                    };
+
+                    Vector2 centro = {16.0f, 16.0f};
+
+                    DrawTexturePro(
+                        texturaMonstro,
+                        origem,
+                        destino,
+                        centro,
+                        0.0f,
+                        WHITE
+                    );
                 }
 
                 for (int i = 0; i < numArvores; i++)
@@ -552,6 +585,7 @@ int main(void)
 
     UnloadTexture(personagem);
     UnloadTexture(texArvore);
+    UnloadTexture(texturaMonstro);
     CloseWindow();
     return 0;
 }
