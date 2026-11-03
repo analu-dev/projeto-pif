@@ -260,23 +260,45 @@ static void DesenhaVida(float vida)
     }
 }
 
-void MoverMonstro(Monstro *monstro, Vector2 jogador, float dt) {
+void MoverMonstro(
+    Monstro *monstro,
+    Vector2 jogador,
+    float dt,
+    int mapa[LINHAS][COLS],
+    int numArvores,
+    Recursos arvores[]
+) {
     if (monstro->morto) return;
 
     Vector2 direcao = Vector2Subtract(jogador, monstro->posicao);
-
     float distancia = Vector2Length(direcao);
 
     if (distancia < 1.0f) return;
 
-    direcao = Vector2Normalize(direcao);
+    direcao = Vector2Scale(direcao, 1.0f / distancia);
 
-    Vector2 movimento = Vector2Scale(
-        direcao,
-        monstro->velocidade * dt
-    );
+    float passo = monstro->velocidade * dt;
+    if (passo > distancia) passo = distancia;
 
-    monstro->posicao = Vector2Add(monstro->posicao, movimento);
+    float raio = 12.0f;
+
+    // Movimento horizontal
+    Vector2 proximo = monstro->posicao;
+    proximo.x += direcao.x * passo;
+
+    if (!ColideComParede(mapa, proximo, raio) &&
+        !ColideComArvore(monstro->posicao, proximo, raio, numArvores, arvores)) {
+        monstro->posicao.x = proximo.x;
+    }
+
+    // Movimento vertical
+    proximo = monstro->posicao;
+    proximo.y += direcao.y * passo;
+
+    if (!ColideComParede(mapa, proximo, raio) &&
+        !ColideComArvore(monstro->posicao, proximo, raio, numArvores, arvores)) {
+        monstro->posicao.y = proximo.y;
+    }
 }
 
 int main(void)
@@ -505,7 +527,14 @@ int main(void)
         for (int i = 0; i < quantidadeMonstros; i++) {
             if (monstros[i].morto) continue;
             
-            MoverMonstro(&monstros[i], jogador, dt);
+            MoverMonstro(
+                &monstros[i],
+                jogador,
+                dt,
+                mapa,
+                numArvores,
+                arvores
+            );
             
             //dano de sol
             if (!isNoite) {
