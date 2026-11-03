@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include "entities.c"
 #include "crafting.c"
+#include "math.h"
+#include "time.h"
 // Ao modificar o codigo, o projeto deve ser recompilado para que as alterações tenham efeito.
 // comando pra fazer isso: gcc main.c -o jogo.exe -I C:\raylib\include -L C:\raylib\lib -lraylib -lopengl32 -lgdi32 -lwinmm
 // certifiqque-se de que o jogo previamente aberto foi fechado antes de recompilar.
@@ -180,7 +182,7 @@ int main(void)
 
     int inventory[50] = {0};
     // inventory[1] vai representar a Madeira. 
-    // Remova ou ajuste se quiser começar com 0 e ganhar apenas derrubando árvores.
+    
 
     recipe receita_graveto;
     receita_graveto.id_result = 10;       
@@ -188,7 +190,8 @@ int main(void)
     receita_graveto.total_resources = 1;  
     receita_graveto.resource[0].id_item = 1; // ID 1 = Madeira
     receita_graveto.resource[0].qtd = 2;     // Custa 2 madeiras
-
+    float tempo_jogo = 0.0f;          // Conta os segundos passados no jogo
+    float duracao_dia_noite = 60.0f;  // Duração completa de um ciclo 
     // --- Sprite do personagem (carregar depois do InitWindow) ---
     Texture2D personagem = LoadTexture("pictures/personagem.png");
     SetTextureFilter(personagem, TEXTURE_FILTER_POINT); // mantém a pixel art nítida
@@ -252,6 +255,10 @@ int main(void)
     {
         float dt = GetFrameTime();
 
+        tempo_jogo += dt;
+        if (tempo_jogo >= duracao_dia_noite) {
+            tempo_jogo = 0.0f; // Reinicia o ciclo
+        }
         // Movimento do jogador
         Vector2 proximo = jogador;
         if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) proximo.x += velocidade * dt;
@@ -341,6 +348,8 @@ int main(void)
             jogador = inicio;
             vida = VIDA_JOGADOR;
         }
+        float ciclo = (tempo_jogo / duracao_dia_noite) * 2.0f * 3.14159265f;
+        float intensidade_noite = (sinf(ciclo - 1.57079f) + 1.0f) * 0.375f;
 
         BeginDrawing();
             ClearBackground(BLACK);
@@ -380,16 +389,24 @@ int main(void)
 
                 
             EndMode2D();
-
+            DrawRectangle(0, 0, LARGURA_TELA, ALTURA_TELA, Fade(BLACK, intensidade_noite));
             // Tela levemente vermelha enquanto toma dano
             if (naAgua) DrawRectangle(0, 0, LARGURA_TELA, ALTURA_TELA, Fade(RED, 0.2f));
 
             DesenhaVida(vida);
 
+            
+            DrawText("Setas ou WASD para mover", 10, 10, 20, BLACK);
+
+            DrawText("Pressione C para craftar graveto!", 10, 32, 16,BLACK);
+            if (intensidade_noite > 0.4f) {
+                DrawText("Noite 🌙", 700, 10, 20, BLUE);
+            } else {
+                DrawText("Dia ☀️", 700, 10, 20, GOLD);
+            }
+            DrawFPS(10, 40);
             DrawText(TextFormat("Madeira (ID 1): %d", inventory[1]), 10, 90, 20, WHITE);
             DrawText(TextFormat("Graveto (ID 10): %d", inventory[10]), 10, 120, 20, WHITE);
-            DrawText("Setas ou WASD para mover", 10, 10, 20, WHITE);
-            DrawFPS(10, 40);
         EndDrawing();
     }
 
