@@ -55,6 +55,10 @@
 #define DANO_AGUA     1.5f       // pontos por segundo (meio coração/s)
 #define MAX_MONSTROS 100
 
+// Ciclo dia/noite
+#define HORA_INICIO      6.0f    // o jogo começa às 06:00
+#define ESCURIDAO_MAXIMA 0.75f   // opacidade máxima da noite (0 = sem escuro, 1 = preto)
+
 Monstro monstros[MAX_MONSTROS] = {0};
 int quantidadeMonstros = 0;
 
@@ -410,16 +414,33 @@ int main(void)
     
     int dentro = 0;                          // 0 = fora, 1 = dentro do local
     Vector2 posAntesDeEntrar = jogador;      // para voltar ao lugar certo ao sair
+    Recursos *arvoresAtivas = arvores;       // árvores do mapa atual (NULL dentro de casa/caverna)
+    int dia = 1;                             // contador de dias
 
     while (!WindowShouldClose())
     {
         float dt = GetFrameTime();
-        Recursos *arvoresAtivas = dentro ? NULL : arvores;   // dentro do local não há árvores
 
+        // --- SISTEMA DE HORÁRIO ---
+        // tempo_jogo conta os segundos do dia atual; ao completar o ciclo, começa outro dia.
         tempo_jogo += dt;
-        if (tempo_jogo >= duracao_dia_noite) {
-            tempo_jogo = 0.0f; // Reinicia o ciclo
+        if (tempo_jogo >= duracao_dia_noite)
+        {
+            tempo_jogo -= duracao_dia_noite;
+            dia++;
         }
+
+        // O ciclo começa às 06:00 e avança 24h em duracao_dia_noite segundos.
+        float progresso_dia = tempo_jogo / duracao_dia_noite;
+        float hora_frac = fmodf(progresso_dia * 24.0f + HORA_INICIO, 24.0f);
+        int hora   = (int)hora_frac;
+        int minuto = (int)((hora_frac - hora) * 60.0f);
+
+        // 00:00 = escuridão máxima, 12:00 = claridade máxima.
+        float angulo_dia = (hora_frac / 24.0f) * 2.0f * PI;
+        float intensidade_noite = (cosf(angulo_dia) + 1.0f) * 0.5f * ESCURIDAO_MAXIMA;
+        bool isNoite = intensidade_noite > 0.4f;
+
         // Movimento do jogador
         Vector2 proximo = jogador;
         if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) proximo.x += velocidade * dt;
@@ -561,12 +582,7 @@ int main(void)
             jogador = inicio;
             vida = VIDA_JOGADOR;
         }
-        float ciclo = (tempo_jogo / duracao_dia_noite) * 2.0f * 3.14159265f;
-        float intensidade_noite = (sinf(ciclo - 1.57079f) + 1.0f) * 0.375f;
-
         //logica de spawn de monstros
-        bool isNoite = intensidade_noite > 0.4f;
-
         if (isNoite){
             timerSpawn += dt;
 
@@ -580,7 +596,7 @@ int main(void)
                     &quantidadeMonstros,
                     jogador,
                     mapa,
-                    arvores
+                    arvoresAtivas
                 );
 
                 printf("Quantidade de monstros: %d\n", quantidadeMonstros);
@@ -602,7 +618,7 @@ int main(void)
                 jogador,
                 dt,
                 mapa,
-                arvores
+                arvoresAtivas
             );
             
             //dano de sol
@@ -715,11 +731,7 @@ int main(void)
             DrawText("Setas ou WASD para mover", 10, 10, 20, BLACK);
 
             DrawText("Pressione C para craftar graveto!", 10, 32, 16,BLACK);
-            if (intensidade_noite > 0.4f) {
-                DrawText("Noite 🌙", 700, 10, 20, BLUE);
-            } else {
-                DrawText("Dia ☀️", 700, 10, 20, GOLD);
-            }
+            DrawText(TextFormat("Dia %d | %s %02d:%02d", dia, isNoite ? "Noite" : "Dia", hora, minuto), 545, 10, 20, isNoite ? BLUE : GOLD);
             DrawFPS(10, 40);
             DrawText(TextFormat("Madeira (ID 1): %d", inventory[1]), 10, 90, 20, WHITE);
             DrawText(TextFormat("Graveto (ID 10): %d", inventory[10]), 10, 120, 20, WHITE);
