@@ -115,9 +115,8 @@ void SpawnMonstro(
     Monstro monstros[],
     int *quantidadeMonstros,
     Vector2 jogador,
-    int mapa[LINHAS][COLS],
-    int numArvores,
-    Recursos arvores[]
+    char mapa[LINHAS][COLS],
+    Recursos *arvores
 ) {
     if (*quantidadeMonstros >= MAX_MONSTROS) return;
 
@@ -155,10 +154,10 @@ void SpawnMonstro(
         // (não usa a função ColideComArvore() pq ela não verifica se o monstro ta literalmente dentro da arvore)
         bool pertoArvore = false;
 
-        for (int i = 0; i < numArvores; i++) {
+        for (Recursos *a = arvores; a != NULL; a = a->proximo) {
             Vector2 tronco = {
-                arvores[i].posicao.x,
-                arvores[i].posicao.y - 20.0f
+                a->posicao.x,
+                a->posicao.y - 20.0f
             };
 
             float dx = pos.x - tronco.x;
@@ -190,7 +189,7 @@ void SpawnMonstro(
     }
 }
 
-int CarregarMapa(const char *caminho, int mapa[LINHAS][COLS])
+int CarregarMapa(const char *caminho, char mapa[LINHAS][COLS])
 {
     FILE *f = fopen(caminho, "r"); //Abre o arquivo para modificar o que deve ser feito (Carregar o mapa).
     if (f == NULL)
@@ -205,7 +204,8 @@ int CarregarMapa(const char *caminho, int mapa[LINHAS][COLS])
         if (fgets(linha, sizeof(linha), f) == NULL) break; // Passa por todos até achar uma quebra de linha.
         for (int x = 0; x < COLS; x++)
         {
-            mapa[y][x] = linha[x] - '0';
+            char c = linha[x];
+            mapa[y][x] = (c >= 'a') ? c : c - '0';
         }
     }
     fclose(f);
@@ -274,9 +274,8 @@ void MoverMonstro(
     Monstro *monstro,
     Vector2 jogador,
     float dt,
-    int mapa[LINHAS][COLS],
-    int numArvores,
-    Recursos arvores[]
+    char mapa[LINHAS][COLS],
+    Recursos *arvores
 ) {
     if (monstro->morto) return;
 
@@ -297,7 +296,7 @@ void MoverMonstro(
     proximo.x += direcao.x * passo;
 
     if (!ColideComParede(mapa, proximo, raio) &&
-        !ColideComArvore(monstro->posicao, proximo, raio, numArvores, arvores)) {
+        !ColideComArvore(monstro->posicao, proximo, raio, arvores)) {
         monstro->posicao.x = proximo.x;
     }
 
@@ -306,7 +305,7 @@ void MoverMonstro(
     proximo.y += direcao.y * passo;
 
     if (!ColideComParede(mapa, proximo, raio) &&
-        !ColideComArvore(monstro->posicao, proximo, raio, numArvores, arvores)) {
+        !ColideComArvore(monstro->posicao, proximo, raio, arvores)) {
         monstro->posicao.y = proximo.y;
     }
 }
@@ -369,9 +368,6 @@ int main(void)
         printf("Textura carregada com sucesso! Tamanho: %d x %d\n",
             texturaMonstro.width, texturaMonstro.height);
     }
-
-    Texture2D texArvore = LoadTexture("pictures/arvore.png");
-    SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
 
     Recursos *arvores = NULL;
     int numArvores = 0;
@@ -584,7 +580,6 @@ int main(void)
                     &quantidadeMonstros,
                     jogador,
                     mapa,
-                    numArvores,
                     arvores
                 );
 
@@ -607,7 +602,6 @@ int main(void)
                 jogador,
                 dt,
                 mapa,
-                numArvores,
                 arvores
             );
             
@@ -676,10 +670,6 @@ int main(void)
                 DrawTexturePro(personagem, origem, destino, centro, 0.0f, WHITE);
                 
                 // 4. Y-SORTING PARTE 2: Desenha as árvores que estão na FRENTE do jogador
-                for (Recursos *a = arvoresAtivas; a != NULL; a = a->proximo)
-                {
-                    if (a->posicao.y > jogador.y) DesenhaArvore(texArvore, a);
-                }
                 // Monstros
                 for (int i = 0; i < quantidadeMonstros; i++) {
                     if (monstros[i].morto) continue;
@@ -709,8 +699,10 @@ int main(void)
                     );
                 }
 
-                for (int i = 0; i < numArvores; i++)
-                    if (arvores[i].posicao.y > jogador.y) DesenhaArvore(texArvore, &arvores[i]);
+                for (Recursos *a = arvoresAtivas; a != NULL; a = a->proximo)
+                {
+                    if (a->posicao.y > jogador.y) DesenhaArvore(texArvore, a);
+                }
 
             EndMode2D();
             DrawRectangle(0, 0, LARGURA_TELA, ALTURA_TELA, Fade(BLACK, intensidade_noite));
