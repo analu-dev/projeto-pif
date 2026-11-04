@@ -4,6 +4,7 @@
 #include "crafting.c"
 #include "math.h"
 #include "time.h"
+#include "raymath.h"
 // Ao modificar o codigo, o projeto deve ser recompilado para que as alterações tenham efeito.
 // comando pra fazer isso: gcc main.c -o jogo.exe -I C:\raylib\include -L C:\raylib\lib -lraylib -lopengl32 -lgdi32 -lwinmm
 // certifiqque-se de que o jogo previamente aberto foi fechado antes de recompilar.
@@ -52,6 +53,13 @@
 #define RECORTE_ARVORE (Rectangle){ 34, 0, 39, 61 }
 
 #define DANO_AGUA     1.5f       // pontos por segundo (meio coração/s)
+#define MAX_MONSTROS 100
+
+Monstro monstros[MAX_MONSTROS] = {0};
+int quantidadeMonstros = 0;
+
+float timerSpawn = 0.0f;
+float intervaloSpawn = 2.0f; // um monstro a cada 2 segundos
 
 static int ColideComParede(char mapa[LINHAS][COLS], Vector2 centro, float raio)
 {
@@ -101,7 +109,88 @@ static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, Recursos 
     return 0;
 }
 
-int CarregarMapa(const char *caminho, char mapa[LINHAS][COLS])
+static int TileEm(char mapa[LINHAS][COLS], Vector2 pos);
+
+void SpawnMonstro(
+    Monstro monstros[],
+    int *quantidadeMonstros,
+    Vector2 jogador,
+    int mapa[LINHAS][COLS],
+    int numArvores,
+    Recursos arvores[]
+) {
+    if (*quantidadeMonstros >= MAX_MONSTROS) return;
+
+    for (int tentativa = 0; tentativa < 100; tentativa++) {
+
+        // Escolhe uma posição aleatória entre -20 e +20 tiles
+        int offsetX = GetRandomValue(-20, 20);
+        int offsetY = GetRandomValue(-20, 20);
+
+        Vector2 pos = {
+            jogador.x + offsetX * TILE,
+            jogador.y + offsetY * TILE
+        };
+
+        // Verifica distância real até o jogador
+        float dx = pos.x - jogador.x;
+        float dy = pos.y - jogador.y;
+        float distancia2 = dx * dx + dy * dy;
+
+        float minDist = 5.0f * TILE;
+        float maxDist = 20.0f * TILE;
+
+        if (distancia2 < minDist * minDist ||
+            distancia2 > maxDist * maxDist) {
+            continue;
+        }
+
+        // Monstros não nascem na água
+        if (TileEm(mapa, pos) == 0) continue;
+
+        // Verifica colisão com paredes
+        if (ColideComParede(mapa, pos, 12.0f)) continue;
+
+        // Verifica colisão com árvores
+        // (não usa a função ColideComArvore() pq ela não verifica se o monstro ta literalmente dentro da arvore)
+        bool pertoArvore = false;
+
+        for (int i = 0; i < numArvores; i++) {
+            Vector2 tronco = {
+                arvores[i].posicao.x,
+                arvores[i].posicao.y - 20.0f
+            };
+
+            float dx = pos.x - tronco.x;
+            float dy = pos.y - tronco.y;
+            float limite = 12.0f + RAIO_TRONCO;
+
+            if (dx * dx + dy * dy < limite * limite) {
+                pertoArvore = true;
+                break;
+            }
+        }
+
+        if (pertoArvore) continue;
+
+        // Posição válida: cria o monstro
+        monstros[*quantidadeMonstros] = (Monstro){
+            .posicao = pos,
+            .velocidade = 100.0f,
+            .nivel = 1,
+            .vida = 10.0f,
+            .vida_maxima = 10.0f,
+            .ataque = 3.0f,
+            .defesa = 0.0f,
+            .morto = false
+        };
+
+        (*quantidadeMonstros)++;
+        return;
+    }
+}
+
+int CarregarMapa(const char *caminho, int mapa[LINHAS][COLS])
 {
     FILE *f = fopen(caminho, "r"); //Abre o arquivo para modificar o que deve ser feito (Carregar o mapa).
     if (f == NULL)
@@ -181,6 +270,47 @@ static void DesenhaVida(float vida)
     }
 }
 
+void MoverMonstro(
+    Monstro *monstro,
+    Vector2 jogador,
+    float dt,
+    int mapa[LINHAS][COLS],
+    int numArvores,
+    Recursos arvores[]
+) {
+    if (monstro->morto) return;
+
+    Vector2 direcao = Vector2Subtract(jogador, monstro->posicao);
+    float distancia = Vector2Length(direcao);
+
+    if (distancia < 1.0f) return;
+
+    direcao = Vector2Scale(direcao, 1.0f / distancia);
+
+    float passo = monstro->velocidade * dt;
+    if (passo > distancia) passo = distancia;
+
+    float raio = 12.0f;
+
+    // Movimento horizontal
+    Vector2 proximo = monstro->posicao;
+    proximo.x += direcao.x * passo;
+
+    if (!ColideComParede(mapa, proximo, raio) &&
+        !ColideComArvore(monstro->posicao, proximo, raio, numArvores, arvores)) {
+        monstro->posicao.x = proximo.x;
+    }
+
+    // Movimento vertical
+    proximo = monstro->posicao;
+    proximo.y += direcao.y * passo;
+
+    if (!ColideComParede(mapa, proximo, raio) &&
+        !ColideComArvore(monstro->posicao, proximo, raio, numArvores, arvores)) {
+        monstro->posicao.y = proximo.y;
+    }
+}
+
 int main(void)
 {
     InitWindow(LARGURA_TELA, ALTURA_TELA, "Mapa maior que a tela");
@@ -227,15 +357,21 @@ int main(void)
 
     char mapa[LINHAS][COLS];
 
-    if (!CarregarMapa(MAPA_ILHA, mapa)) 
-    {
-        // Se falhar, descarrega o que já subiu na memória antes de fechar
-        UnloadTexture(personagem);
-        UnloadTexture(texArvore);
-        UnloadTexture(texGrama);
-        CloseWindow();
-        return 1;
+    if (!CarregarMapa(MAPA_ILHA, mapa)) return 1;
+
+    printf("Arquivo existe: %d\n", FileExists("pictures/carangueijo.png"));
+
+    Texture2D texturaMonstro = LoadTexture("pictures/carangueijo.png");
+
+    if (!IsTextureValid(texturaMonstro)) {
+        printf("ERRO: Nao foi possivel carregar a textura do monstro!\n");
+    } else {
+        printf("Textura carregada com sucesso! Tamanho: %d x %d\n",
+            texturaMonstro.width, texturaMonstro.height);
     }
+
+    Texture2D texArvore = LoadTexture("pictures/arvore.png");
+    SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
 
     Recursos *arvores = NULL;
     int numArvores = 0;
@@ -432,6 +568,60 @@ int main(void)
         float ciclo = (tempo_jogo / duracao_dia_noite) * 2.0f * 3.14159265f;
         float intensidade_noite = (sinf(ciclo - 1.57079f) + 1.0f) * 0.375f;
 
+        //logica de spawn de monstros
+        bool isNoite = intensidade_noite > 0.4f;
+
+        if (isNoite){
+            timerSpawn += dt;
+
+            if (timerSpawn >= intervaloSpawn) {
+                timerSpawn = 0.0f;
+
+                printf("Tentando spawnar monstro...\n");
+
+                SpawnMonstro(
+                    monstros,
+                    &quantidadeMonstros,
+                    jogador,
+                    mapa,
+                    numArvores,
+                    arvores
+                );
+
+                printf("Quantidade de monstros: %d\n", quantidadeMonstros);
+
+            }
+        }
+        else {
+            timerSpawn = 0.0f;
+        }
+
+        float danoSol = 2.0f;
+        
+        //atualiza monstros
+        for (int i = 0; i < quantidadeMonstros; i++) {
+            if (monstros[i].morto) continue;
+            
+            MoverMonstro(
+                &monstros[i],
+                jogador,
+                dt,
+                mapa,
+                numArvores,
+                arvores
+            );
+            
+            //dano de sol
+            if (!isNoite) {
+                monstros[i].vida -= danoSol * dt;
+
+                if (monstros[i].vida <= 0) {
+                    monstros[i].vida = 0;
+                    monstros[i].morto = true;
+                }
+            }
+        }
+
         BeginDrawing();
             ClearBackground(BLACK);
 
@@ -490,6 +680,37 @@ int main(void)
                 {
                     if (a->posicao.y > jogador.y) DesenhaArvore(texArvore, a);
                 }
+                // Monstros
+                for (int i = 0; i < quantidadeMonstros; i++) {
+                    if (monstros[i].morto) continue;
+
+                    Rectangle origem = {
+                        0, 0,
+                        (float)texturaMonstro.width,
+                        (float)texturaMonstro.height
+                    };
+
+                    Rectangle destino = {
+                        monstros[i].posicao.x,
+                        monstros[i].posicao.y,
+                        32.0f,
+                        32.0f
+                    };
+
+                    Vector2 centro = {16.0f, 16.0f};
+
+                    DrawTexturePro(
+                        texturaMonstro,
+                        origem,
+                        destino,
+                        centro,
+                        0.0f,
+                        WHITE
+                    );
+                }
+
+                for (int i = 0; i < numArvores; i++)
+                    if (arvores[i].posicao.y > jogador.y) DesenhaArvore(texArvore, &arvores[i]);
 
             EndMode2D();
             DrawRectangle(0, 0, LARGURA_TELA, ALTURA_TELA, Fade(BLACK, intensidade_noite));
@@ -519,6 +740,7 @@ int main(void)
     UnloadTexture(personagem);
     UnloadTexture(texArvore);
     UnloadTexture(texGrama);
+    UnloadTexture(texturaMonstro);
     CloseWindow();
     return 0;
 }
