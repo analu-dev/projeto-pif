@@ -23,6 +23,17 @@
 #define COLS 100
 #define LINHAS 75
 
+#define MAPA_ILHA    "mapa.txt"
+#define MAPA_CASA    "casa.txt"
+#define MAPA_CAVERNA "caverna.txt"
+#define TILE_PORTA_CASA   7
+#define TILE_PORTA_CAVERNA 8
+
+#define CASA_SPAWN_X (55 * TILE + TILE / 2.0f)
+#define CASA_SPAWN_Y (38 * TILE + TILE / 2.0f)
+#define CAVERNA_SPAWN_X (50 * TILE + TILE / 2.0f)
+#define CAVERNA_SPAWN_Y (40 * TILE + TILE / 2.0f)
+
 // Sprite do personagem (spritesheet 4x4, frames de 32x32)
 #define SPRITE_TAM      32
 #define SPRITE_FRAMES   4
@@ -42,7 +53,6 @@
 #define RECORTE_ARVORE (Rectangle){ 34, 0, 39, 61 }
 
 #define DANO_AGUA     1.5f       // pontos por segundo (meio coração/s)
-
 #define MAX_MONSTROS 100
 
 Monstro monstros[MAX_MONSTROS] = {0};
@@ -51,7 +61,7 @@ int quantidadeMonstros = 0;
 float timerSpawn = 0.0f;
 float intervaloSpawn = 2.0f; // um monstro a cada 2 segundos
 
-static int ColideComParede(int mapa[LINHAS][COLS], Vector2 centro, float raio)
+static int ColideComParede(char mapa[LINHAS][COLS], Vector2 centro, float raio)
 {
     int minX = (int)((centro.x - raio) / TILE);
     int maxX = (int)((centro.x + raio) / TILE);
@@ -63,7 +73,7 @@ static int ColideComParede(int mapa[LINHAS][COLS], Vector2 centro, float raio)
         for (int x = minX; x <= maxX; x++)
         {
             // Somente os tiles andaveís (valor 1, 2 e 6) permitem a passagem; fora do mapa também bloqueia.
-            if (x >= 0 && x < COLS && y >= 0 && y < LINHAS && (mapa[y][x] == 0 || mapa[y][x] == 2 || mapa[y][x] == 1 || mapa[y][x] == 6)) continue;
+            if (x >= 0 && x < COLS && y >= 0 && y < LINHAS && (mapa[y][x] == 0 || mapa[y][x] == 2 || mapa[y][x] == 1 || mapa[y][x] == 6 || mapa[y][x] == 7 || mapa[y][x] == 8 || mapa[y][x] == 9)) continue;
 
             float esquerda = x * TILE;
             float topo = y * TILE;
@@ -78,13 +88,13 @@ static int ColideComParede(int mapa[LINHAS][COLS], Vector2 centro, float raio)
     return 0;
 }
 
-static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, int numArvores, Recursos arvores[])
+static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, Recursos *arvores)
 {
-    for (int i = 0; i < numArvores; i++)
+    for (Recursos *a = arvores; a != NULL; a = a->proximo)
     {
 
         // centro do tronco: um pouco acima da base da árvore
-        Vector2 c = { arvores[i].posicao.x, arvores[i].posicao.y - 20.0f };
+        Vector2 c = { a->posicao.x, a->posicao.y - 20.0f };
         float limite = raio + RAIO_TRONCO;
 
         float dxN = proximo.x - c.x, dyN = proximo.y - c.y;
@@ -99,7 +109,7 @@ static int ColideComArvore(Vector2 atual, Vector2 proximo, float raio, int numAr
     return 0;
 }
 
-static int TileEm(int mapa[LINHAS][COLS], Vector2 pos);
+static int TileEm(char mapa[LINHAS][COLS], Vector2 pos);
 
 void SpawnMonstro(
     Monstro monstros[],
@@ -216,7 +226,7 @@ static void DesenhaArvore(Texture2D tex, Recursos *r)
 }
 
 // Retorna o id do tile sob a posição (ou -1 se estiver fora do mapa)
-static int TileEm(int mapa[LINHAS][COLS], Vector2 pos)
+static int TileEm(char mapa[LINHAS][COLS], Vector2 pos)
 {
     int tx = (int)(pos.x / TILE);
     int ty = (int)(pos.y / TILE);
@@ -321,11 +331,20 @@ int main(void)
     receita_graveto.total_resources = 1;  
     receita_graveto.resource[0].id_item = 1; // ID 1 = Madeira
     receita_graveto.resource[0].qtd = 2;     // Custa 2 madeiras
+
+    // --- CARREGAMENTO DE TEXTURAS (Uma única vez aqui) ---
     float tempo_jogo = 0.0f;          // Conta os segundos passados no jogo
     float duracao_dia_noite = 60.0f;  // Duração completa de um ciclo 
     // --- Sprite do personagem (carregar depois do InitWindow) ---
     Texture2D personagem = LoadTexture("pictures/personagem.png");
     SetTextureFilter(personagem, TEXTURE_FILTER_POINT); // mantém a pixel art nítida
+    
+    Texture2D texArvore = LoadTexture("pictures/arvore.png");
+    SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
+
+    Texture2D texGrama = LoadTexture("pictures/textures/grama.png");
+    SetTextureFilter(texGrama, TEXTURE_FILTER_POINT);
+
     int frameAtual = 0;
     int direcao = 0;          // 0=baixo, 1=esquerda, 2=direita, 3=cima
     float timerAnim = 0.0f;
@@ -336,9 +355,9 @@ int main(void)
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 
-    int mapa[LINHAS][COLS];
+    char mapa[LINHAS][COLS];
 
-    if (!CarregarMapa("mapa.txt", mapa)) return 1;
+    if (!CarregarMapa(MAPA_ILHA, mapa)) return 1;
 
     printf("Arquivo existe: %d\n", FileExists("pictures/carangueijo.png"));
 
@@ -354,7 +373,7 @@ int main(void)
     Texture2D texArvore = LoadTexture("pictures/arvore.png");
     SetTextureFilter(texArvore, TEXTURE_FILTER_POINT);
 
-    Recursos arvores[MAX_ARVORES];
+    Recursos *arvores = NULL;
     int numArvores = 0;
     int madeira = 0;
 
@@ -371,31 +390,35 @@ int main(void)
             float dx = pos.x - jogador.x, dy = pos.y - jogador.y;
             if (dx * dx + dy * dy < 64.0f * 64.0f) continue;
 
-            // nem colada em outra árvore
+                        // nem colada em outra árvore
             int perto = 0;
-            for (int i = 0; i < numArvores; i++)
+            for (Recursos *a = arvores; a != NULL; a = a->proximo)
             {
-                dx = pos.x - arvores[i].posicao.x;
-                dy = pos.y - arvores[i].posicao.y;
+                dx = pos.x - a->posicao.x;
+                dy = pos.y - a->posicao.y;
                 if (dx * dx + dy * dy < DIST_MIN_ARVORES * DIST_MIN_ARVORES) { perto = 1; break; }
             }
             if (perto) continue;
 
-            arvores[numArvores++] = (Recursos){
+            inserir_recurso(&arvores, (Recursos){
                 .posicao = pos,
                 .vida = 3,
                 .vida_maxima = 3,
                 .quebrado = false,
                 .tempo_renascimento = 0.0f,
                 .cooldown_renascimento = 10.0f
-            };
+            });
+            numArvores++;
         }
     }
     
+    int dentro = 0;                          // 0 = fora, 1 = dentro do local
+    Vector2 posAntesDeEntrar = jogador;      // para voltar ao lugar certo ao sair
 
     while (!WindowShouldClose())
     {
         float dt = GetFrameTime();
+        Recursos *arvoresAtivas = dentro ? NULL : arvores;   // dentro do local não há árvores
 
         tempo_jogo += dt;
         if (tempo_jogo >= duracao_dia_noite) {
@@ -405,18 +428,64 @@ int main(void)
         Vector2 proximo = jogador;
         if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) proximo.x += velocidade * dt;
         if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) proximo.x -= velocidade * dt;
-        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, numArvores, arvores)) jogador.x = proximo.x;
+        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, arvoresAtivas)) jogador.x = proximo.x;
 
         proximo = jogador;
         if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) proximo.y += velocidade * dt;
         if (IsKeyDown(KEY_UP)   || IsKeyDown(KEY_W)) proximo.y -= velocidade * dt;
-        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, numArvores, arvores)) jogador.y = proximo.y;
+        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComArvore(jogador, proximo, 14.0f, arvoresAtivas)) jogador.y = proximo.y;
 
         // Limita o jogador dentro do mapa
         if (jogador.x < 0) jogador.x = 0;
         if (jogador.y < 0) jogador.y = 0;
         if (jogador.x > MAPA_LARGURA) jogador.x = MAPA_LARGURA;
         if (jogador.y > MAPA_ALTURA)  jogador.y = MAPA_ALTURA;
+
+        // Guarda o último ponto que NÃO era porta (é para onde voltamos ao sair)
+        if (!dentro && TileEm(mapa, jogador) != (TILE_PORTA_CASA) && TileEm(mapa, jogador) != (TILE_PORTA_CAVERNA)) posAntesDeEntrar = jogador;
+
+        // Pisou na porta: troca de mapa
+        if (TileEm(mapa, jogador) == TILE_PORTA_CASA)
+        {
+            if (!dentro)
+            {
+                if (CarregarMapa(MAPA_CASA, mapa))
+                {
+                    dentro = 1;
+                    jogador = (Vector2){ CASA_SPAWN_X, CASA_SPAWN_Y };
+                }
+            }
+            else
+            {
+                if (CarregarMapa(MAPA_ILHA, mapa))
+                {
+                    dentro = 0;
+                    jogador = posAntesDeEntrar;
+                }
+            }
+            arvoresAtivas = dentro ? NULL : arvores;
+        }
+
+        if(TileEm(mapa, jogador) == TILE_PORTA_CAVERNA)
+        {
+            if (!dentro)
+            {
+                if (CarregarMapa(MAPA_CAVERNA, mapa))
+                {
+                    dentro = 1;
+                    jogador = (Vector2){ CAVERNA_SPAWN_X, CAVERNA_SPAWN_Y };
+                }
+            }
+            else
+            {
+                if (CarregarMapa(MAPA_ILHA, mapa))
+                {
+                    dentro = 0;
+                    jogador = posAntesDeEntrar;
+                }
+            }
+            arvoresAtivas = dentro ? NULL : arvores;
+        }
 
         // Direção e animação do personagem
         int andando = 0;
@@ -455,24 +524,25 @@ int main(void)
         if (camera.target.x > MAPA_LARGURA - metadeL) camera.target.x = MAPA_LARGURA - metadeL;
         if (camera.target.y > MAPA_ALTURA  - metadeA) camera.target.y = MAPA_ALTURA  - metadeA;
 
-        atualiza_recurso(arvores, numArvores);
+                atualiza_recurso(arvores);
 
         if (IsKeyPressed(KEY_E))
         {
-            for (int i = 0; i < numArvores; i++)
+            for (Recursos *a = arvoresAtivas; a != NULL; a = a->proximo)
             {
-                if (arvores[i].quebrado) continue;
+                if (a->quebrado) continue;
 
-                float dx = jogador.x - arvores[i].posicao.x;
-                float dy = jogador.y - arvores[i].posicao.y;
+                float dx = jogador.x - a->posicao.x;
+                float dy = jogador.y - a->posicao.y;
                 if (dx * dx + dy * dy < 50.0f * 50.0f)   // alcance de 50 px
                 {
-                    quebrar_recurso(&arvores[i], 1);
-                    if (arvores[i].quebrado) inventory[1]++;   // ganha madeira ao derrubar
+                    quebrar_recurso(a, 1);
+                    if (a->quebrado) inventory[1]++;   // ganha madeira ao derrubar
                     break;                                // só uma árvore por golpe
                 }
             }
         }
+
         if (IsKeyPressed(KEY_C))
         {
             printf("\n--- Tentando craftar ---\n");
@@ -487,6 +557,11 @@ int main(void)
         // Morreu: volta ao início com a vida cheia
         if (vida <= 0.0f)
         {
+            if (dentro && CarregarMapa(MAPA_ILHA, mapa))
+            {
+                dentro = 0;
+                arvoresAtivas = arvores;
+            }
             jogador = inicio;
             vida = VIDA_JOGADOR;
         }
@@ -551,35 +626,60 @@ int main(void)
             ClearBackground(BLACK);
 
             BeginMode2D(camera);
+                
+                // 1. DESENHO DO CHÃO DO MAPA
                 for (int y = 0; y < LINHAS; y++)
                 {
                     for (int x = 0; x < COLS; x++)
                     {
-                        Color cor;
-                        switch (mapa[y][x])
+                        // Se for o tile 2 (Grama), desenha a textura repetida em vez de cor sólida
+                        if (mapa[y][x] == 2)
                         {
-                            case 0: cor = BLUE;      break;
-                            case 1: cor = BEIGE;     break;
-                            case 2: cor = GREEN;     break;
-                            case 3: cor = DARKGRAY;  break;
-                            case 4: cor = LIGHTGRAY; break;
-                            case 5: cor = BROWN;     break;
-                            case 6: cor = (Color){ 20, 140, 60, 255 }; break;
-                            case 7: cor = BLACK;     break;
-                            default: cor = BLACK;    break;
+                            DrawTexture(texGrama, x * TILE, y * TILE, WHITE);
                         }
-                        DrawRectangle(x * TILE, y * TILE, TILE, TILE, cor);
+                        else
+                        {
+                            Color cor;
+                            switch (mapa[y][x])
+                            {
+                                case 0: cor = BLUE;      break;
+                                case 1: cor = BEIGE;     break;
+                                case 3: cor = DARKGRAY;  break;
+                                case 4: cor = LIGHTGRAY; break;
+                                case 5: cor = BROWN;     break;
+                                case 6: cor = (Color){ 20, 140, 60, 255 }; break;
+                                case 7: case 8: cor = BLACK;     break;
+                                case 9: cor = (Color){ 141, 73, 37, 255 }; break;
+                                case 'a': cor = (Color){ 255, 255, 0, 255 }; break;
+                                case 'b': cor = (Color){ 255, 0, 255, 255 }; break;
+                                case 'c': cor = (Color){ 0, 255, 255, 255 }; break;
+                                case 'd': cor = (Color){ 255, 128, 0, 255 }; break;
+                                case 'e': cor = (Color){ 128, 0, 255, 255 }; break;
+                                case 'f': cor = (Color){ 0, 255, 128, 255 }; break;
+                                default: cor = BLACK;    break; 
+                            }
+                            DrawRectangle(x * TILE, y * TILE, TILE, TILE, cor);
+                        }
                     }
                 }
-                for (int i = 0; i < numArvores; i++)
-                    if (arvores[i].posicao.y <= jogador.y) DesenhaArvore(texArvore, &arvores[i]);
 
-                // Personagem (substitui a bola vermelha)
+                // 2. Y-SORTING PARTE 1: Desenha as árvores que estão ATRÁS do jogador
+                for (Recursos *a = arvoresAtivas; a != NULL; a = a->proximo)
+                {
+                    if (a->posicao.y <= jogador.y) DesenhaArvore(texArvore, a);
+                }
+
+                // 3. DESENHO DO PERSONAGEM
                 Rectangle origem  = { frameAtual * (float)SPRITE_TAM, direcao * (float)SPRITE_TAM, SPRITE_TAM, SPRITE_TAM };
                 Rectangle destino = { jogador.x, jogador.y, SPRITE_TAM, SPRITE_TAM };
                 Vector2 centro = { SPRITE_TAM / 2.0f, SPRITE_TAM / 2.0f };
                 DrawTexturePro(personagem, origem, destino, centro, 0.0f, WHITE);
                 
+                // 4. Y-SORTING PARTE 2: Desenha as árvores que estão na FRENTE do jogador
+                for (Recursos *a = arvoresAtivas; a != NULL; a = a->proximo)
+                {
+                    if (a->posicao.y > jogador.y) DesenhaArvore(texArvore, a);
+                }
                 // Monstros
                 for (int i = 0; i < quantidadeMonstros; i++) {
                     if (monstros[i].morto) continue;
@@ -612,7 +712,6 @@ int main(void)
                 for (int i = 0; i < numArvores; i++)
                     if (arvores[i].posicao.y > jogador.y) DesenhaArvore(texArvore, &arvores[i]);
 
-                
             EndMode2D();
             DrawRectangle(0, 0, LARGURA_TELA, ALTURA_TELA, Fade(BLACK, intensidade_noite));
             // Tela levemente vermelha enquanto toma dano
@@ -635,8 +734,12 @@ int main(void)
         EndDrawing();
     }
 
+    // --- DESCARREGAR RECURSOS ---
+        // --- DESCARREGAR RECURSOS ---
+    liberar_recursos(arvores);
     UnloadTexture(personagem);
     UnloadTexture(texArvore);
+    UnloadTexture(texGrama);
     UnloadTexture(texturaMonstro);
     CloseWindow();
     return 0;
