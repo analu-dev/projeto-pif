@@ -333,15 +333,29 @@ int main(void)
     // inventory[1] vai representar a Madeira. 
     
 
-    Receita receitaGraveto = {
-        .resultado = ITEM_GRAVETO, .qtdResultado = 1,
-        .ing = { { ITEM_MADEIRA, 2 } }, .totalIng = 1
+    Receita receitasCraft[] = {
+        {
+            .nome = "Graveto",
+            .resultado = ITEM_GRAVETO, .qtdResultado = 1,
+            .ing = { { ITEM_MADEIRA, 2 } }, .totalIng = 1
+        },
+        {
+            .nome = "Espada de Madeira",
+            .resultado = ITEM_ESPADA, .qtdResultado = 1, .tier = TIER_MADEIRA,
+            .ing = { { ITEM_MADEIRA, 2 }, { ITEM_GRAVETO, 1 } }, .totalIng = 2
+        },
+        {
+            .nome = "Espada de Pedra",
+            .resultado = ITEM_ESPADA, .qtdResultado = 1, .tier = TIER_PEDRA,
+            .ing = { { ITEM_PEDRA, 2 }, { ITEM_GRAVETO, 1 } }, .totalIng = 2
+        },
     };
-
-    Receita receitaEspadaPedra = {
-        .resultado = ITEM_ESPADA, .qtdResultado = 1, .tier = TIER_PEDRA,
-        .ing = { { ITEM_PEDRA, 2 }, { ITEM_GRAVETO, 1 } }, .totalIng = 2
-    };
+    int totalReceitas = (int)(sizeof(receitasCraft) / sizeof(receitasCraft[0]));
+    int receitaSelecionada = 0;
+    int craftingAberto = 0;
+    char mensagemCraft[64] = "";
+    float tempoMensagemCraft = 0.0f;
+    Color corMensagemCraft = WHITE;
 
     // --- CARREGAMENTO DE TEXTURAS (Uma única vez aqui) ---
     float tempo_jogo = 0.0f;          // Conta os segundos passados no jogo
@@ -468,6 +482,8 @@ int main(void)
     {
         float dt = GetFrameTime();
 
+        if (tempoMensagemCraft > 0.0f) tempoMensagemCraft -= dt;
+
         // --- SISTEMA DE HORÁRIO ---
         // tempo_jogo conta os segundos do dia atual; ao completar o ciclo, começa outro dia.
         tempo_jogo += dt;
@@ -488,16 +504,19 @@ int main(void)
         float intensidade_noite = (cosf(angulo_dia) + 1.0f) * 0.5f * ESCURIDAO_MAXIMA;
         bool isNoite = intensidade_noite > 0.4f;
 
-        // Movimento do jogador
+        // Movimento do jogador (bloqueado enquanto o crafting está aberto)
         Vector2 proximo = jogador;
-        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) proximo.x += velocidade * dt;
-        if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) proximo.x -= velocidade * dt;
-        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComRecursos(jogador, proximo, 14.0f, arvoresAtivas)) jogador.x = proximo.x;
+        if (!craftingAberto)
+        {
+            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) proximo.x += velocidade * dt;
+            if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) proximo.x -= velocidade * dt;
+            if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComRecursos(jogador, proximo, 14.0f, arvoresAtivas)) jogador.x = proximo.x;
 
-        proximo = jogador;
-        if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) proximo.y += velocidade * dt;
-        if (IsKeyDown(KEY_UP)   || IsKeyDown(KEY_W)) proximo.y -= velocidade * dt;
-        if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComRecursos(jogador, proximo, 14.0f, arvoresAtivas)) jogador.y = proximo.y;
+            proximo = jogador;
+            if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)) proximo.y += velocidade * dt;
+            if (IsKeyDown(KEY_UP)   || IsKeyDown(KEY_W)) proximo.y -= velocidade * dt;
+            if (!ColideComParede(mapa, proximo, 14.0f) && !ColideComRecursos(jogador, proximo, 14.0f, arvoresAtivas)) jogador.y = proximo.y;
+        }
 
         // Limita o jogador dentro do mapa
         if (jogador.x < 0) jogador.x = 0;
@@ -553,10 +572,13 @@ int main(void)
 
         // Direção e animação do personagem
         int andando = 0;
-        if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) { direcao = 0; andando = 1; }
-        if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) { direcao = 3; andando = 1; }
-        if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) { direcao = 1; andando = 1; }
-        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { direcao = 2; andando = 1; }
+        if (!craftingAberto)
+        {
+            if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) { direcao = 0; andando = 1; }
+            if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) { direcao = 3; andando = 1; }
+            if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) { direcao = 1; andando = 1; }
+            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) { direcao = 2; andando = 1; }
+        }
 
         if (andando)
         {
@@ -590,7 +612,7 @@ int main(void)
 
                 atualiza_recurso(arvores);
 
-        if (IsKeyPressed(KEY_E))
+        if (!craftingAberto && IsKeyPressed(KEY_E))
         {
             for (Recursos *a = arvoresAtivas; a != NULL; a = a->proximo)
             {
@@ -607,9 +629,18 @@ int main(void)
             }
         }
 
-        if (IsKeyPressed(KEY_C)) Craftar(&inv, receitaGraveto);
+        // Abre/fecha a interface de crafting (fecha o inventário para não sobrepor)
+        if (IsKeyPressed(KEY_C))
+        {
+            craftingAberto = !craftingAberto;
+            if (craftingAberto) invAberto = 0;
+        }
 
-        if (IsKeyPressed(KEY_TAB)) invAberto = !invAberto;
+        if (IsKeyPressed(KEY_TAB))
+        {
+            invAberto = !invAberto;
+            if (invAberto) craftingAberto = 0;
+        }
         for (int k = 0; k < INV_COLS; k++)
             if (IsKeyPressed(KEY_ONE + k)) inv.selecionado = k;
 
@@ -781,10 +812,31 @@ int main(void)
                 Inv_Draw(&inv, 166, 394, 1);                            // só a hotbar
             }
 
-            
-            DrawText("Setas ou WASD para mover", 10, 10, 20, BLACK);
+            if (craftingAberto) {
+                int craftou = DesenharCraftingUI(
+                    receitasCraft, totalReceitas, &inv, &receitaSelecionada,
+                    (tempoMensagemCraft > 0.0f) ? mensagemCraft : NULL,
+                    corMensagemCraft
+                );
 
-            DrawText("Pressione C para craftar graveto!", 10, 32, 16,BLACK);
+                if (craftou) {
+                    if (Craftar(&inv, receitasCraft[receitaSelecionada])) {
+                        snprintf(mensagemCraft, sizeof(mensagemCraft),
+                                 "Craftado: %s", receitasCraft[receitaSelecionada].nome);
+                        corMensagemCraft = GREEN;
+                    } else {
+                        snprintf(mensagemCraft, sizeof(mensagemCraft),
+                                 "Faltam ingredientes ou espaco!");
+                        corMensagemCraft = RED;
+                    }
+                    tempoMensagemCraft = 2.0f;
+                }
+            }
+
+            
+            DrawText("Setas ou WASD para mover | E: coletar", 10, 10, 18, BLACK);
+
+            DrawText("TAB: inventario | C: crafting", 10, 32, 16, BLACK);
             DrawText(TextFormat("Dia %d | %s %02d:%02d", dia, isNoite ? "Noite" : "Dia", hora, minuto), 545, 10, 20, isNoite ? BLUE : GOLD);
             DrawFPS(10, 40);
         EndDrawing();
