@@ -593,6 +593,9 @@ static void DesenhaTelaMorte(float tempoMorte, float tempoRestante, int dia)
     DesenhaTextoCentralizado(textoDia, 242.0f, 20.0f, 2.0f,
                              Fade((Color){ 225, 215, 220, 255 }, entrada));
 
+    DesenhaTextoCentralizado("SEUS ITENS FORAM PERDIDOS", 272.0f, 13.0f, 2.0f,
+                             Fade((Color){ 155, 110, 118, 255 }, entrada));
+
     // Barra de renascimento
     float progresso = 1.0f - Limitar01(tempoRestante / DURACAO_TELA_MORTE);
     DrawRectangleRounded((Rectangle){ 250, 314, 300, 12 }, 1.0f, 8,
@@ -825,6 +828,16 @@ int main(void)
 
                 jogador = inicio;
                 vida = VIDA_JOGADOR;
+
+                // Reinicia a run: volta ao dia 1 e perde todos os itens
+                dia = 1;
+                tempo_jogo = 0.0f;
+                inv = (Inventario){0};
+                invAberto = 0;
+                craftingAberto = 0;
+                receitaSelecionada = 0;
+                mensagemCraft[0] = '\0';
+                tempoMensagemCraft = 0.0f;
 
                 telaAtual = TELA_JOGO;
                 tempoTela = 0.0f;
